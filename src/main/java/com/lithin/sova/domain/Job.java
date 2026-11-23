@@ -43,6 +43,9 @@ public class Job {
     @Column(name = "claimed_at")
     private Instant claimedAt;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -52,11 +55,16 @@ public class Job {
     protected Job() {} // required by JPA
 
     public Job(String type, String payload, int priority, int maxAttempts, Instant scheduledAt) {
+        this(type, payload, priority, maxAttempts, scheduledAt, null);
+    }
+
+    public Job(String type, String payload, int priority, int maxAttempts, Instant scheduledAt, String idempotencyKey) {
         this.type = type;
         this.payload = payload;
         this.priority = priority;
         this.maxAttempts = maxAttempts;
         this.scheduledAt = scheduledAt;
+        this.idempotencyKey = (idempotencyKey == null || idempotencyKey.isBlank()) ? null : idempotencyKey.trim();
         this.status = JobStatus.PENDING;
         this.attempts = 0;
     }
@@ -146,6 +154,7 @@ public class Job {
     public Instant getNextRetryAt() { return nextRetryAt; }
     public String getClaimedBy() { return claimedBy; }
     public Instant getClaimedAt() { return claimedAt; }
+    public String getIdempotencyKey() { return idempotencyKey; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

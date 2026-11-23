@@ -2,7 +2,9 @@ package com.lithin.sova.worker;
 
 import com.lithin.sova.config.SovaProperties;
 import com.lithin.sova.domain.Job;
+import jakarta.annotation.PreDestroy;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -19,6 +21,7 @@ public class JobWorker {
     private final JobExecutionService executionService;
     private final HeartbeatService heartbeatService;
     private final JobHandlerRegistry handlerRegistry;
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
     public JobWorker(
             SovaProperties properties,
@@ -35,14 +38,23 @@ public class JobWorker {
 
     @Scheduled(fixedDelayString = "${sova.poll-delay-ms:1000}")
     public void pollAndExecute() {
-        if (!properties.workerEnabled()) {
+        if (!properties.workerEnabled() || shuttingDown.get()) {
             return;
         }
         String workerId = properties.workerId();
         List<Job> claimed = claimService.claimBatch(workerId, properties.batchSize());
         for (Job job : claimed) {
+            if (shuttingDown.get()) {
+                break;
+            }
             executeSingle(job, workerId);
         }
+    }
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown.set(true);
+        log.info("Worker {} entering graceful shutdown; stopping new job claims", properties.workerId());
     }
 
     void executeSingle(Job job, String workerId) {

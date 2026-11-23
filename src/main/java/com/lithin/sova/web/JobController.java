@@ -6,6 +6,7 @@ import com.lithin.sova.dto.SubmitJobRequest;
 import com.lithin.sova.service.JobService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -22,8 +23,10 @@ public class JobController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public JobResponse submit(@Valid @RequestBody SubmitJobRequest req) {
-        return service.submit(req);
+    public JobResponse submit(
+            @Valid @RequestBody SubmitJobRequest req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        return service.submit(req, idempotencyKey);
     }
 
     @GetMapping("/{id}")
@@ -34,6 +37,11 @@ public class JobController {
     @GetMapping
     public List<JobResponse> list(@RequestParam(required = false) JobStatus status) {
         return service.list(status);
+    }
+
+    @GetMapping("/stats")
+    public Map<JobStatus, Long> stats() {
+        return service.stats();
     }
 
     @PostMapping("/{id}/replay")

@@ -4,6 +4,7 @@ import com.lithin.sova.domain.Job;
 import com.lithin.sova.domain.JobStatus;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,11 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
     List<Job> findByStatusOrderByCreatedAtDesc(JobStatus status);
 
     List<Job> findAllByOrderByCreatedAtDesc();
+
+    Optional<Job> findByIdempotencyKey(String idempotencyKey);
+
+    @Query("SELECT j.status, COUNT(j) FROM Job j GROUP BY j.status")
+    List<Object[]> countGroupedByStatus();
 
     // Atomic single-statement claim using partial index idx_jobs_claimable.
     // SKIP LOCKED prevents concurrent workers from blocking or double-claiming the same rows.

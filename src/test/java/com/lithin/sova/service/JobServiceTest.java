@@ -65,4 +65,29 @@ class JobServiceTest {
         assertThrows(IllegalStateException.class, () -> service.replay(id));
         verify(repository, never()).save(any());
     }
+
+    @Test
+    void submit_withDuplicateIdempotencyKey_returnsExistingJobWithoutSaving() {
+        Job existing = new Job("echo", "first", 1, 3, null, "req-123");
+        when(repository.findByIdempotencyKey("req-123")).thenReturn(Optional.of(existing));
+
+        JobResponse res = service.submit(new SubmitJobRequest("echo", "duplicate", 1, null, 3), "req-123");
+
+        assertEquals("first", res.payload());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void stats_populatesAllStatusesIncludingZeros() {
+        when(repository.countGroupedByStatus()).thenReturn(java.util.List.of(
+                new Object[]{JobStatus.PENDING, 4L},
+                new Object[]{JobStatus.SUCCEEDED, 10L}
+        ));
+
+        var stats = service.stats();
+
+        assertEquals(4L, stats.get(JobStatus.PENDING));
+        assertEquals(10L, stats.get(JobStatus.SUCCEEDED));
+        assertEquals(0L, stats.get(JobStatus.DEAD));
+    }
 }

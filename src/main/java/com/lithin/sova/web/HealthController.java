@@ -13,7 +13,7 @@ public class HealthController {
         return "Sova is active. System Status: GREEN.";
     }
 
-    @GetMapping("/")
+    @GetMapping("/api/info")
     public Map<String, Object> index() {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("name", "Sova Distributed Job Scheduler");
