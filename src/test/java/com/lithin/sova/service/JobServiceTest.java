@@ -5,11 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.lithin.sova.domain.Job;
+import com.lithin.sova.domain.JobAttempt;
 import com.lithin.sova.domain.JobStatus;
+import com.lithin.sova.dto.JobAttemptResponse;
 import com.lithin.sova.dto.JobResponse;
 import com.lithin.sova.dto.SubmitJobRequest;
+import com.lithin.sova.repository.JobAttemptRepository;
 import com.lithin.sova.repository.JobRepository;
 import java.lang.reflect.Field;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -24,8 +29,38 @@ class JobServiceTest {
     @Mock
     private JobRepository repository;
 
+    @Mock
+    private JobAttemptRepository attemptRepository;
+
     @InjectMocks
     private JobService service;
+
+    @Test
+    void attempts_returnsHistoryInOrderForExistingJob() {
+        UUID id = UUID.randomUUID();
+        Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(repository.existsById(id)).thenReturn(true);
+        when(attemptRepository.findByJobIdOrderByIdAsc(id)).thenReturn(List.of(
+                new JobAttempt(id, 1, "w-1", JobAttempt.Outcome.FAILED, "boom", t0, t0.plusMillis(120)),
+                new JobAttempt(id, 2, "w-2", JobAttempt.Outcome.SUCCEEDED, null, t0.plusSeconds(5), t0.plusSeconds(5).plusMillis(80))
+        ));
+
+        List<JobAttemptResponse> res = service.attempts(id);
+
+        assertEquals(2, res.size());
+        assertEquals(JobAttempt.Outcome.FAILED, res.get(0).outcome());
+        assertEquals(120L, res.get(0).durationMs());
+        assertEquals("w-2", res.get(1).workerId());
+    }
+
+    @Test
+    void attempts_unknownJob_throwsNotFound() {
+        UUID id = UUID.randomUUID();
+        when(repository.existsById(id)).thenReturn(false);
+
+        assertThrows(JobNotFoundException.class, () -> service.attempts(id));
+        verifyNoInteractions(attemptRepository);
+    }
 
     @Test
     void submit_appliesDefaultPriorityAndMaxAttempts() {

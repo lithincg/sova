@@ -3,6 +3,7 @@ package com.lithin.sova.worker;
 import com.lithin.sova.config.SovaProperties;
 import com.lithin.sova.domain.Job;
 import jakarta.annotation.PreDestroy;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -60,18 +61,20 @@ public class JobWorker {
     void executeSingle(Job job, String workerId) {
         MDC.put("workerId", workerId);
         MDC.put("jobId", job.getId().toString());
+        Instant startedAt = null;
         try {
             // Start Redis TTL heartbeat before moving to RUNNING so the reaper sees this worker is alive.
             heartbeatService.startHeartbeat(job.getId(), workerId);
             executionService.markRunning(job.getId());
+            startedAt = Instant.now();
 
             JobHandler handler = handlerRegistry.get(job.getType());
             handler.handle(job);
 
-            executionService.markSucceeded(job.getId());
+            executionService.markSucceeded(job.getId(), workerId, startedAt);
             log.info("Job completed successfully type={}", job.getType());
         } catch (Exception e) {
-            executionService.handleFailure(job.getId(), e);
+            executionService.handleFailure(job.getId(), e, workerId, startedAt);
         } finally {
             heartbeatService.stopHeartbeat(job.getId());
             MDC.clear();

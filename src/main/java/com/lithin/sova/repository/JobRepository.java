@@ -15,6 +15,11 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
 
     List<Job> findAllByOrderByCreatedAtDesc();
 
+    // Bounded variants for the dashboard so a public demo never streams an unbounded table.
+    List<Job> findTop200ByOrderByCreatedAtDesc();
+
+    List<Job> findTop200ByStatusOrderByCreatedAtDesc(JobStatus status);
+
     Optional<Job> findByIdempotencyKey(String idempotencyKey);
 
     @Query("SELECT j.status, COUNT(j) FROM Job j GROUP BY j.status")

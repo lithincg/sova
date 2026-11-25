@@ -1,6 +1,7 @@
 package com.lithin.sova.web;
 
 import com.lithin.sova.domain.JobStatus;
+import com.lithin.sova.dto.JobAttemptResponse;
 import com.lithin.sova.dto.JobResponse;
 import com.lithin.sova.dto.SubmitJobRequest;
 import com.lithin.sova.service.JobService;
@@ -42,6 +43,11 @@ public class JobController {
     @GetMapping("/stats")
     public Map<JobStatus, Long> stats() {
         return service.stats();
+    }
+
+    @GetMapping("/{id}/attempts")
+    public List<JobAttemptResponse> attempts(@PathVariable UUID id) {
+        return service.attempts(id);
     }
 
     @PostMapping("/{id}/replay")

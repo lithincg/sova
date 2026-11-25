@@ -17,12 +17,13 @@ public record JobResponse(
         Instant nextRetryAt,
         String claimedBy,
         Instant claimedAt,
+        String idempotencyKey,
         Instant createdAt,
         Instant updatedAt) {
 
     public static JobResponse from(Job j) {
         return new JobResponse(j.getId(), j.getType(), j.getPayload(), j.getStatus(), j.getAttempts(),
                 j.getMaxAttempts(), j.getPriority(), j.getScheduledAt(), j.getNextRetryAt(),
-                j.getClaimedBy(), j.getClaimedAt(), j.getCreatedAt(), j.getUpdatedAt());
+                j.getClaimedBy(), j.getClaimedAt(), j.getIdempotencyKey(), j.getCreatedAt(), j.getUpdatedAt());
     }
 }

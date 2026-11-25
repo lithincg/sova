@@ -2,8 +2,10 @@ package com.lithin.sova.service;
 
 import com.lithin.sova.domain.Job;
 import com.lithin.sova.domain.JobStatus;
+import com.lithin.sova.dto.JobAttemptResponse;
 import com.lithin.sova.dto.JobResponse;
 import com.lithin.sova.dto.SubmitJobRequest;
+import com.lithin.sova.repository.JobAttemptRepository;
 import com.lithin.sova.repository.JobRepository;
 import java.util.EnumMap;
 import java.util.List;
@@ -21,9 +23,11 @@ public class JobService {
     static final int DEFAULT_MAX_ATTEMPTS = 3;
 
     private final JobRepository repository;
+    private final JobAttemptRepository attemptRepository;
 
-    public JobService(JobRepository repository) {
+    public JobService(JobRepository repository, JobAttemptRepository attemptRepository) {
         this.repository = repository;
+        this.attemptRepository = attemptRepository;
     }
 
     @Transactional
@@ -66,9 +70,16 @@ public class JobService {
 
     public List<JobResponse> list(JobStatus status) {
         List<Job> jobs = status == null
-                ? repository.findAllByOrderByCreatedAtDesc()
-                : repository.findByStatusOrderByCreatedAtDesc(status);
+                ? repository.findTop200ByOrderByCreatedAtDesc()
+                : repository.findTop200ByStatusOrderByCreatedAtDesc(status);
         return jobs.stream().map(JobResponse::from).toList();
+    }
+
+    public List<JobAttemptResponse> attempts(UUID id) {
+        if (!repository.existsById(id)) {
+            throw new JobNotFoundException(id);
+        }
+        return attemptRepository.findByJobIdOrderByIdAsc(id).stream().map(JobAttemptResponse::from).toList();
     }
 
     public Map<JobStatus, Long> stats() {

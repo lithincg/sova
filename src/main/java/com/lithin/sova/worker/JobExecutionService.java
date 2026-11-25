@@ -2,7 +2,9 @@ package com.lithin.sova.worker;
 
 import com.lithin.sova.config.SovaProperties;
 import com.lithin.sova.domain.Job;
+import com.lithin.sova.domain.JobAttempt;
 import com.lithin.sova.domain.JobStatus;
+import com.lithin.sova.repository.JobAttemptRepository;
 import com.lithin.sova.repository.JobRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -19,14 +21,17 @@ public class JobExecutionService {
     private static final Logger log = LoggerFactory.getLogger(JobExecutionService.class);
 
     private final JobRepository repository;
+    private final JobAttemptRepository attemptRepository;
     private final SovaProperties properties;
     private final MeterRegistry meterRegistry;
 
     public JobExecutionService(
             JobRepository repository,
+            JobAttemptRepository attemptRepository,
             SovaProperties properties,
             MeterRegistry meterRegistry) {
         this.repository = repository;
+        this.attemptRepository = attemptRepository;
         this.properties = properties;
         this.meterRegistry = meterRegistry;
     }
@@ -39,15 +44,18 @@ public class JobExecutionService {
     }
 
     @Transactional
-    public void markSucceeded(UUID jobId) {
+    public void markSucceeded(UUID jobId, String workerId, Instant startedAt) {
         Job job = repository.findById(jobId).orElseThrow();
+        int attemptNumber = job.getAttempts() + 1;
         job.markSucceeded();
         repository.save(job);
+        attemptRepository.save(new JobAttempt(jobId, attemptNumber, workerId,
+                JobAttempt.Outcome.SUCCEEDED, null, startedAt, Instant.now()));
         meterRegistry.counter("sova.jobs.completed", "status", "succeeded").increment();
     }
 
     @Transactional
-    public void handleFailure(UUID jobId, Throwable error) {
+    public void handleFailure(UUID jobId, Throwable error, String workerId, Instant startedAt) {
         Job job = repository.findById(jobId).orElseThrow();
         long base = properties.retryBaseSeconds();
         long max = properties.retryMaxSeconds();
@@ -55,8 +63,12 @@ public class JobExecutionService {
         long jitterBound = Math.max(1L, base / 2);
         long jitter = ThreadLocalRandom.current().nextLong(0, jitterBound + 1);
 
-        job.recordFailure(Instant.now(), base, max, jitter);
+        int attemptNumber = job.getAttempts() + 1;
+        Instant now = Instant.now();
+        job.recordFailure(now, base, max, jitter);
         repository.save(job);
+        attemptRepository.save(new JobAttempt(jobId, attemptNumber, workerId,
+                JobAttempt.Outcome.FAILED, describe(error), startedAt != null ? startedAt : now, now));
 
         if (job.getStatus() == JobStatus.DEAD) {
             meterRegistry.counter("sova.jobs.completed", "status", "dead").increment();
@@ -74,11 +86,21 @@ public class JobExecutionService {
         if (job == null || (job.getStatus() != JobStatus.CLAIMED && job.getStatus() != JobStatus.RUNNING)) {
             return false;
         }
+        int attemptNumber = job.getAttempts() + 1;
+        String deadWorker = job.getClaimedBy();
+        Instant startedAt = job.getClaimedAt() != null ? job.getClaimedAt() : job.getUpdatedAt();
         job.requeueFromCrash();
         repository.save(job);
+        attemptRepository.save(new JobAttempt(jobId, attemptNumber, deadWorker, JobAttempt.Outcome.REAPED,
+                "Heartbeat expired; job reclaimed by reaper", startedAt, Instant.now()));
         meterRegistry.counter("sova.jobs.reclaimed").increment();
         log.warn("Reaper reclaimed stale job {} -> status={} attempts={}",
                 jobId, job.getStatus(), job.getAttempts());
         return true;
+    }
+
+    private static String describe(Throwable error) {
+        String msg = error.getMessage();
+        return error.getClass().getSimpleName() + (msg != null ? ": " + msg : "");
     }
 }
